@@ -16,8 +16,22 @@ class postgres {
   include postgres::common
 
   # Handle version specified in site.pp (or default to postgresql) 
-  $postgres_client = "postgresql${postgres_version}"
-  $postgres_server = "postgresql${postgres_version}-server"
+  $postgres_client = $operatingsystem ? {
+    /(?i-mx:ubuntu|debian)/ => $postgres_version ? {
+      "" => "postgresql-client",
+      default => "postgresql-client-${postgres_version}"
+    },
+    /(?i-mx:centos|fedora|redhat)/ => "postgresql${postgres_version}",
+    default => "postgresql${postgres_version}"
+  }
+  $postgres_server = $operatingsystem ? {
+    /(?i-mx:ubuntu|debian)/ => $postgres_version ? {
+      "" => "postgresql",
+      default => "postgresql-${postgres_version}"
+    },
+    /(?i-mx:centos|fedora|redhat)/ => "postgresql${postgres_version}-server"
+    default => "postgresql${postgres_version}-server"
+  }
 
   package { [$postgres_client, $postgres_server]: 
     ensure => installed,
@@ -27,8 +41,8 @@ class postgres {
     shell => '/bin/bash',
     ensure => 'present',
     comment => 'PostgreSQL Server',
-    uid => '26',
-    gid => '26',
+    uid => '105',
+    gid => '108',
     home => '/var/lib/pgsql',
     managehome => true,
     password => '!!',
@@ -36,7 +50,7 @@ class postgres {
 
   group { 'postgres':
     ensure => 'present',
-    gid => '26'
+    gid => '108'
   }
 
 }
@@ -47,14 +61,14 @@ define postgres::initdb() {
     exec {
         "InitDB":
           command => "/bin/chown postgres.postgres /var/lib/pgsql && /bin/su  postgres -c \"/usr/bin/initdb /var/lib/pgsql/data -E UTF8\"",
-          require =>  [User['postgres'],Package["postgresql${postgres_version}-server"]],
+          require =>  [User['postgres'],Package["$postgres_server"]],
           unless => "/usr/bin/test -e /var/lib/pgsql/data/PG_VERSION",
     }
   } else {
     exec {
         "InitDB":
           command => "/bin/chown postgres.postgres /var/lib/pgsql && echo \"${postgres_password}\" > /tmp/ps && /bin/su  postgres -c \"/usr/bin/initdb /var/lib/pgsql/data --auth='password' --pwfile=/tmp/ps -E UTF8 \" && rm -rf /tmp/ps",
-          require =>  [User['postgres'],Package["postgresql${postgres_version}-server"]],
+          require =>  [User['postgres'],Package["$postgres_server"]],
           unless => "/usr/bin/test -e /var/lib/pgsql/data/PG_VERSION ",
     }
   }
