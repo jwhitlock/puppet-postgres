@@ -29,12 +29,12 @@ class postgres::common {
     }
   }
   # Define some variables
-  $client = $operatingsystem ? {
+  $clientpkg = $operatingsystem ? {
     /(?i-mx:ubuntu|debian)/ => "postgresql-client-${postgres_version}",
     /(?i-mx:centos|fedora|redhat)/ => "postgresql${postgres_version}",
     default => "postgresql${postgres_version}"
   }
-  $server = $operatingsystem ? {
+  $serverpkg = $operatingsystem ? {
     /(?i-mx:ubuntu|debian)/ => "postgresql-${postgres_version}",
     /(?i-mx:centos|fedora|redhat)/ => "postgresql${postgres_version}-server",
     default => "postgresql${postgres_version}-server"

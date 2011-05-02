@@ -15,7 +15,7 @@ class postgres {
   # Common stuff, like ensuring postgres_password defined in site.pp
   include postgres::common
 
-  package { [$postgres::common::client, $postgres::common::server]: 
+  package { [$postgres::common::clientpkg, $postgres::common::serverpkg]: 
     ensure => installed,
   }
 
@@ -57,14 +57,14 @@ define postgres::initdb() {
     exec {
         "InitDB":
           command => "/bin/chown postgres.postgres ${postgres::common::datadir} && /bin/su postgres -c \"/usr/bin/initdb ${postgres::common::datadir} -E UTF8\"",
-          require =>  [User['postgres'],Package[$postgres::common::server]],
+          require =>  [User['postgres'],Package[$postgres::common::serverpkg]],
           unless => "/usr/bin/test -e ${postgres::common::datadir}/PG_VERSION",
     }
   } else {
     exec {
         "InitDB":
           command => "/bin/chown postgres.postgres ${postgres::common::datadir} && echo \"${postgres_password}\" > /tmp/ps && /bin/su  postgres -c \"/usr/bin/initdb ${postgres::common::datadir} --auth='password' --pwfile=/tmp/ps -E UTF8 \" && rm -rf /tmp/ps",
-          require =>  [User['postgres'],Package[$postgres::common::server]],
+          require =>  [User['postgres'],Package[$postgres::common::serverpkg]],
           unless => "/usr/bin/test -e ${postgres::common::datadir}/PG_VERSION ",
     }
   }
