@@ -15,61 +15,57 @@ class postgres {
   # Common stuff, like ensuring postgres_password defined in site.pp
   include postgres::common
 
-  # Handle version specified in site.pp (or default to postgresql) 
-  $postgres_client = $operatingsystem ? {
-    /(?i-mx:ubuntu|debian)/ => $postgres_version ? {
-      "" => "postgresql-client",
-      default => "postgresql-client-${postgres_version}"
-    },
-    /(?i-mx:centos|fedora|redhat)/ => "postgresql${postgres_version}",
-    default => "postgresql${postgres_version}"
-  }
-  $postgres_server = $operatingsystem ? {
-    /(?i-mx:ubuntu|debian)/ => $postgres_version ? {
-      "" => "postgresql",
-      default => "postgresql-${postgres_version}"
-    },
-    /(?i-mx:centos|fedora|redhat)/ => "postgresql${postgres_version}-server"
-    default => "postgresql${postgres_version}-server"
-  }
-
-  package { [$postgres_client, $postgres_server]: 
+  package { [$postgres::common::client, $postgres::common::server]: 
     ensure => installed,
   }
 
   user { 'postgres':
     shell => '/bin/bash',
     ensure => 'present',
-    comment => 'PostgreSQL Server',
-    uid => '105',
-    gid => '108',
-    home => '/var/lib/pgsql',
+    comment => operating_system ? {
+      /(?i-mx:centos|fedora|redhat)/ => 'PostgreSQL Server',
+      /(?i-mx:debian|ubuntu)/ => 'PostgreSQL administrator',
+      default => 'PostgreSQL administrator'
+    },
+    uid => operating_system ? {
+      /(?i-mx:centos|fedora|redhat)/ => 26,
+      default => undef
+    },
+    gid => operating_system ? {
+      /(?i-mx:centos|fedora|redhat)/ => 26,
+      default => 'postgres'
+    },
+    home => $postgres::common::homedir,
     managehome => true,
     password => '!!',
   }
 
   group { 'postgres':
     ensure => 'present',
-    gid => '108'
+    gid => operating_system ? {
+      /(?i-mx:centos|fedora|redhat)/ => 26,
+      default => undef
+    },
   }
 
 }
 
 # Initialize the database with the postgres_password password.
 define postgres::initdb() {
+  include postgres::common
   if $postgres_password == "" {
     exec {
         "InitDB":
-          command => "/bin/chown postgres.postgres /var/lib/pgsql && /bin/su  postgres -c \"/usr/bin/initdb /var/lib/pgsql/data -E UTF8\"",
-          require =>  [User['postgres'],Package["$postgres_server"]],
-          unless => "/usr/bin/test -e /var/lib/pgsql/data/PG_VERSION",
+          command => "/bin/chown postgres.postgres ${postgres::common::datadir} && /bin/su postgres -c \"/usr/bin/initdb ${postgres::common::datadir} -E UTF8\"",
+          require =>  [User['postgres'],Package[$postgres::common::server]],
+          unless => "/usr/bin/test -e ${postgres::common::datadir}/PG_VERSION",
     }
   } else {
     exec {
         "InitDB":
-          command => "/bin/chown postgres.postgres /var/lib/pgsql && echo \"${postgres_password}\" > /tmp/ps && /bin/su  postgres -c \"/usr/bin/initdb /var/lib/pgsql/data --auth='password' --pwfile=/tmp/ps -E UTF8 \" && rm -rf /tmp/ps",
-          require =>  [User['postgres'],Package["$postgres_server"]],
-          unless => "/usr/bin/test -e /var/lib/pgsql/data/PG_VERSION ",
+          command => "/bin/chown postgres.postgres ${postgres::common::datadir} && echo \"${postgres_password}\" > /tmp/ps && /bin/su  postgres -c \"/usr/bin/initdb ${postgres::common::datadir} --auth='password' --pwfile=/tmp/ps -E UTF8 \" && rm -rf /tmp/ps",
+          require =>  [User['postgres'],Package[$postgres::common::server]],
+          unless => "/usr/bin/test -e ${postgres::common::datadir}/PG_VERSION ",
     }
   }
 }
@@ -87,7 +83,8 @@ define postgres::enable {
 
 # Postgres host based authentication 
 define postgres::hba ($postgres_password="",$allowedrules){
-  file { "/var/lib/pgsql/data/pg_hba.conf":
+  include postgres::common
+  file { "${postgres::common::datadir}/pg_hba.conf":
     content => template("postgres/pg_hba.conf.erb"),	
     owner  => "root",
     group  => "root",
@@ -98,7 +95,8 @@ define postgres::hba ($postgres_password="",$allowedrules){
 }
 
 define postgres::config ($listen="localhost")  {
-  file {"/var/lib/pgsql/data/postgresql.conf":
+  include postgres::common
+  file {"${postgres::common::datadir}/postgresql.conf":
     content => template("postgres/postgresql.conf.erb"),
     owner => postgres,
     group => postgres,
